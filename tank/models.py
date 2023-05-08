@@ -23,7 +23,7 @@ class Tank(Model):
 
 
 class TankVolume(Model):
-    tank_id = ForeignKey(
+    tank = ForeignKey(
         Tank,
         null=False,
         blank=False,
@@ -35,7 +35,7 @@ class TankVolume(Model):
         default=0,
         help_text='The volume of the tank at a given moment.'
     )
-    created_at = DateTimeField(auto_now_add=True)
+    created_at = DateTimeField()
     updated_at = DateTimeField(auto_now=True)
 
     def __str__(self):
