@@ -1,5 +1,6 @@
 from itertools import groupby
-from datetime import datetime, timedelta
+from datetime import timedelta
+from typing import List
 
 from django.utils import timezone
 from django.db.models.signals import post_save, post_delete
@@ -11,75 +12,122 @@ from tank.models import TankVolume, AverageSales
 
 class AverageSalesCalculator:
     def __init__(self):
+        # the sales of each day
         self.sales = []
+        # the past weeks from the date the sale is registered.
+        self.past_week_days = []
 
     def calculate_sales_average(self, sender, instance) -> None:
-        dates = self.create_week_days()
-        last_aggregated_date = dates[-1]
-        next_date_index = 1
-        max_date = TankVolume.objects.latest('created_at').created_at
+        # retrieve the max day in the db. this is needed to calculate the past five weeks accordingly.
+        max_date = self.get_max_date(instance.created_at)
+        self.past_week_days = self.create_past_weeks(max_date)
+        first_aggregated_date = self.past_week_days[-1]
         two_pairs = 4
-        while last_aggregated_date.date() < max_date.date():
-            last_aggregated_date = dates[-1]
-            tank_volumes = sender.objects.annotate(
-                day=TruncDay('created_at'),
-                month=TruncMonth('created_at'),
-                year=TruncYear('created_at')
-            ).filter(
-                tank=instance.tank.id,
-                created_at__gte=dates[0].strftime('%Y-%m-%d'),
-                created_at__lte=(last_aggregated_date + timedelta(days=1)).strftime('%Y-%m-%d')
-            ).values('id', 'volume', 'created_at').order_by('created_at')
-            aggregated_volumes_by_date = groupby(tank_volumes, key=lambda x: (x['created_at'].strftime("%d %m %Y")))
+        # using annotate in order to retrieve less data from the database and decrease bandwidth.
+        tank_volumes = sender.objects.annotate(
+            day=TruncDay('created_at'),
+            month=TruncMonth('created_at'),
+            year=TruncYear('created_at')
+        ).filter(
+            tank=instance.tank.id,
+            created_at__gte=first_aggregated_date.strftime('%Y-%m-%d'),
+            created_at__lte=(max_date + timedelta(days=1)).strftime('%Y-%m-%d')
+        ).values('id', 'volume', 'created_at').order_by('created_at')
+        aggregated_volumes_by_date = groupby(tank_volumes, key=lambda x: (x['created_at'].strftime("%d %m %Y")))
 
-            single_agg = []
-            for _, volume_agg in aggregated_volumes_by_date:
-                list_volume = list(volume_agg)
-                combined = list(zip(list_volume, list_volume[1:])) if len(list_volume) != two_pairs else zip(
-                    list_volume[::2], list_volume[1::2])
+        for _, volume_agg in aggregated_volumes_by_date:
+            list_volume = list(volume_agg)
+            # combine the sales by a group of two.
+            # example: [(10, 30), (20, 45)], for the 1st and 8th of Jan, respectively.
+            # the first condition works for an odd number of sales on a day.
+            # if the day has 4 sales, a difference calculation needed to be applied. But in principle, the pairs
+            # are created similarly.
+            combined = list(zip(list_volume, list_volume[1:])) if len(list_volume) != two_pairs else zip(
+                list_volume[::2], list_volume[1::2])
 
-                if not combined:
-                    single_agg.extend(list_volume)
-                    continue
+            if not combined:
+                # if there is a single sale for a day, get the previous day sale.
+                previous_day = list_volume[0]['created_at'] - timezone.timedelta(days=1)
+                last_day_volume = TankVolume.objects.filter(
+                    tank=instance.tank,
+                    created_at__year=previous_day.year,
+                    created_at__month=previous_day.month,
+                    created_at__day=previous_day.day
+                ).last()
+                if last_day_volume:
+                    combined = [({'volume': last_day_volume.volume}, {'volume': list_volume[0]['volume']})]
 
-                if single_agg:
-                    self.calculate_difference(list(zip(single_agg, single_agg[1:])))
-                    single_agg = []
+            self.calculate_difference(combined)
 
-                self.calculate_difference(combined)
+        if self.sales:
+            # if sales exist, save if in the database.
+            self.save_average_sales(
+                instance.tank,
+                self.past_week_days[0],
+                max_date
+            )
 
-            if self.sales:
-                self.save_average_sales(instance.tank, last_aggregated_date)
-            # update 5-week date range
+    def get_max_date(self, created_at):
+        """
+        Retrieve the latest date in the TankVolume sales. If date does not exist, the date of the current sale
+        is considered the latest.
+        """
+        try:
+            return TankVolume.objects.latest('created_at').created_at
+        except TankVolume.DoesNotExist:
+            return created_at
 
-            dates = self.create_week_days(day=dates[next_date_index].day)
-            next_date_index += 1
-
-    def create_week_days(self, start: int = 1, end: int = 5, year: int = 2023, month: int = 1, day: int = 1):
-        base = timezone.datetime(year, month, day, tzinfo=timezone.utc)
-        days = [base]
-        for x in range(start, end):
-            base += timedelta(days=7)
-            days.append(base)
+    def create_past_weeks(self, date: timezone.datetime, end: int = 5) -> List[timezone.datetime]:
+        """
+        Generate the past number of weeks based on the `date`.
+        The number of weeks generated can be set by the `end` parameter.
+        """
+        days = [date]
+        for x in range(1, end):
+            date -= timedelta(days=7)
+            days.append(date)
         return days
 
     def calculate_difference(self, combined_aggregation):
+        """
+        Calculate difference between two volumes.
+        If the difference is negative, the difference will be considered as 0.
+        """
         for first_volume, second_volume in combined_aggregation:
             delta = 0
             if first_volume['volume'] < second_volume['volume']:
                 delta = second_volume['volume'] - first_volume['volume']
-            print(delta)
             self.sales.append(delta)
 
-    def save_average_sales(self, tank: int, date):
-        avg_sales = sum(self.sales) / len(self.sales)
-        try:
-            avg_sales_obj = AverageSales.objects.get(tank=tank, calculated_at=date)
-            avg_sales_obj.avg_sales = avg_sales
-            avg_sales_obj.save()
-        except AverageSales.DoesNotExist:
-            AverageSales.objects.create(tank=tank, avg_sales=avg_sales, calculated_at=date)
-        self.sales = []
+    def save_average_sales(self, tank: int, date, max_date):
+        """
+        Saves the AverageSales to the database. Before saving, it checks that the number of past weeks
+        generated by the create_past_weeks method is equal to the past week TankVolume in the database.
+        This helps validate the average, otherwise, several averages can be created.
+        """
+        values = TankVolume.objects.filter(
+            tank=tank,
+            created_at__gte=self.past_week_days[-1].strftime('%Y-%m-%d'),
+            created_at__lte=(max_date + timedelta(days=1)).strftime('%Y-%m-%d')
+        ).values_list('created_at', flat=True)
+        values = set((value.date() for value in values))
+        past_week_number = 5
+        # validate before saving. this prevents duplicate averages.
+        if all(d.date() in values for d in self.past_week_days) and len(values) >= past_week_number:
+            avg_sales = sum(self.sales) / len(self.sales)
+            try:
+                # if the sale object exists, edit it, otherwise, create a new object.
+                avg_sales_obj = AverageSales.objects.get(
+                    tank=tank,
+                    calculated_at__year=date.year,
+                    calculated_at__month=date.month,
+                    calculated_at__day=date.day
+                )
+                avg_sales_obj.avg_sales = avg_sales
+                avg_sales_obj.save()
+            except AverageSales.DoesNotExist:
+                AverageSales.objects.create(tank=tank, avg_sales=avg_sales, calculated_at=date)
+            self.sales = []
 
 
 @receiver(post_delete, sender=TankVolume)
