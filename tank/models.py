@@ -43,7 +43,7 @@ class TankVolume(Model):
 
 
 class AverageSales(Model):
-    tank_id = ForeignKey(
+    tank = ForeignKey(
         Tank,
         null=False,
         blank=False,
