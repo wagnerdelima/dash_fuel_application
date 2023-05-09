@@ -9,7 +9,6 @@ from django.db.models.functions import TruncDay, TruncMonth, TruncYear
 from tank.models import TankVolume
 
 
-
 @receiver(post_save, sender=TankVolume)
 def recalculate_sales_average(sender, instance, created, **kwargs):
     dates = create_week_days()
