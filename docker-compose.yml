@@ -1,0 +1,31 @@
+version: "3.7"
+
+services:
+  app:
+    build: .
+    image: dash_fuel_image
+    container_name: dash_fuel_container
+    command: >
+      bash -c "pip install -r requirements.txt
+      && sh run.sh"
+    # to be set with ${} from within the CD tool.
+    # hard-coding here for the sake of simplicity.
+    environment:
+      - SECRET_KEY=django-insecure-ieh@i4390r@xk!&*jgboo5i-(-y^(e9hb@5x1dz*8l^ikw+71c
+      - POSTGRES_DB=dash_fuel
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - HOST=db
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+  db:
+    image: postgres:13.2
+    restart: always
+    environment:
+      - POSTGRES_DB=dash_fuel
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
