@@ -28,12 +28,10 @@ class TankVolume(Model):
         null=False,
         blank=False,
         on_delete=DO_NOTHING,
-        help_text='Reference to the tank.'
+        help_text='Reference to the tank.',
     )
     volume = FloatField(
-        null=False,
-        default=0,
-        help_text='The volume of the tank at a given moment.'
+        null=False, default=0, help_text='The volume of the tank at a given moment.'
     )
     created_at = DateTimeField()
     updated_at = DateTimeField(auto_now=True)
@@ -48,13 +46,11 @@ class AverageSales(Model):
         null=False,
         blank=False,
         on_delete=DO_NOTHING,
-        help_text='Reference to the tank.'
+        help_text='Reference to the tank.',
     )
 
     avg_sales = FloatField(
-        null=False,
-        default=0,
-        help_text='The average sales of the past 5 weeks.'
+        null=False, default=0, help_text='The average sales of the past 5 weeks.'
     )
 
     calculated_at = DateTimeField(

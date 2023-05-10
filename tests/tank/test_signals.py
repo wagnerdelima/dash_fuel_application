@@ -6,6 +6,7 @@ from model_bakery.recipe import Recipe
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dash_fuel_application.settings')
 from django import setup
+
 setup()
 
 from tank.signals import AverageSalesCalculator
@@ -23,7 +24,9 @@ def create_tank_volume(quantity: int = 12):
         datetime(2023, 1, 29),
         datetime(2023, 2, 5),
     )
-    return Recipe(TankVolume, tank=tank, volume=cycle(volumes), created_at=cycle(dates)).make(_quantity=quantity)
+    return Recipe(
+        TankVolume, tank=tank, volume=cycle(volumes), created_at=cycle(dates)
+    ).make(_quantity=quantity)
 
 
 def tear_down():
@@ -61,7 +64,10 @@ def test_create_past_weeks():
 
 def test_calculate_difference():
     avg_calculator = AverageSalesCalculator()
-    combined_aggregations = [({'volume': 10}, {'volume': 20}), ({'volume': 50}, {'volume': 20})]
+    combined_aggregations = [
+        ({'volume': 10}, {'volume': 20}),
+        ({'volume': 50}, {'volume': 20}),
+    ]
     avg_calculator.calculate_difference(combined_aggregations)
     assert len(avg_calculator.sales) == 2
     assert avg_calculator.sales[0] == 10
