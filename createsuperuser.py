@@ -1,7 +1,8 @@
+"""Create a Django super user from command line."""
 from django.db import IntegrityError
 from django.contrib.auth.models import User
 
-import environ # This package import from 'django-environ' https://pypi.org/project/django-environ/
+import environ
 env = environ.Env(
     DEBUG=(bool, False)
 )
