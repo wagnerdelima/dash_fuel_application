@@ -14,7 +14,7 @@ class AverageAdmin(admin.ModelAdmin):
 
 @admin.register(TankVolume)
 class AverageAdmin(admin.ModelAdmin):
-    list_display = ('tank', 'volume', 'created_at', 'updated_at')
+    list_display = ('tank', 'volume', 'created_at')
 
 
 # Register your models here.
