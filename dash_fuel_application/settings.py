@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = getenv('SECRET_KEY')
+SECRET_KEY = getenv('SECRET_KEY', 'test')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -80,13 +80,14 @@ WSGI_APPLICATION = 'dash_fuel_application.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'HOST': getenv('HOST'),
+        'HOST': getenv('HOST', '127.0.0.1'),
         'PORT': 5432,
-        'NAME': getenv('POSTGRES_DB'),
-        'USER': getenv('POSTGRES_USER'),
-        'PASSWORD': getenv('POSTGRES_PASSWORD'),
+        'NAME': getenv('POSTGRES_DB', 'dash_fuel'),
+        'USER': getenv('POSTGRES_USER', 'postgres'),
+        'PASSWORD': getenv('POSTGRES_PASSWORD', '0119'),
     }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
