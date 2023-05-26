@@ -6,8 +6,7 @@ services:
     image: dash_fuel_image
     container_name: dash_fuel_container
     command: >
-      bash -c "pip install -r requirements.txt
-      && sh run.sh"
+      bash -c "sh run.sh"
     # to be set with ${} from within the CD tool.
     # hard-coding here for the sake of simplicity.
     environment:
